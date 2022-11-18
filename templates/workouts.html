@@ -11,9 +11,14 @@
   <ul>
   {% for workout in workouts %}
     <li>
-      <em>{{ workout.userId }}:</em> {{ workout.reps }}
+      {{ workout.userId }}: {{ workout.reps }}
     </li>
   {% endfor %}
   </ul>
 </body>
+<script>
+    window.setTimeout(function () {
+      window.location.reload();
+    }, 30000);
+    </script>
 </html>
