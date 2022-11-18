@@ -1,1 +1,32 @@
-[{"userId": "3", "reps": 0}, {"userId": "4", "reps": 0}, {"userId": "2", "reps": 3}, {"userId": "8", "reps": 1}, {"userId": "8", "reps": 1}]
+[
+  {
+    "setId": "1",
+    "userId": "4081720",
+    "name": "Adithya",
+    "reps": 0
+  },
+  {
+    "setId": "2",
+    "userId": "4",
+    "name": "Chahak",
+    "reps": 0
+  },
+  {
+    "setId": "3",
+    "userId": "2",
+    "name": "Gagan",
+    "reps": 3
+  },
+  {
+    "setId": "4",
+    "userId": "8",
+    "name": "Sahil",
+    "reps": 1
+  },
+  {
+    "setId": "5",
+    "userId": "8",
+    "name": "Adithya",
+    "reps": 1
+  }
+]

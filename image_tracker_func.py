@@ -10,6 +10,13 @@ import time
 import cv2
 import requests
 import json
+import random
+import face_recognition
+
+FaceCamurl = "http://172.20.10.13:8080/shot.jpg"
+TrackingCamUrl = "http://172.20.10.9:8080/shot.jpg"
+RepCamUrl = "http://172.20.10.11:8080/shot.jpg"
+
 
 FaceCamurl = "http://172.20.10.11:8080/shot.jpg"
 TrackingCamUrl = "http://172.20.10.9:8080/shot.jpg"
@@ -26,33 +33,119 @@ constants = {
 	}
 }
 
-DB = [
-	{
-		"userId": "3",
-		"reps": 0
-	},
-	{
-		"userId": "4",
-		"reps": 0
-	}
+userDB = {
+    "4081720": {
+        "name": "Adithya"
+    }
+}
+
+objectToUserIdMapping = {
+    "obj22": "3322"
+}
+
+# Load a sample picture and learn how to recognize it.
+gagan_image = face_recognition.load_image_file("Gagan.png")
+gagan_face_encoding = face_recognition.face_encodings(gagan_image)[0]
+
+# Load a second sample picture and learn how to recognize it.
+chahak_image = face_recognition.load_image_file("Chahak.png")
+chahak_face_encoding = face_recognition.face_encodings(chahak_image)[0]
+
+# Load the third sample picture and learn how to recognize it.
+adithya_image = face_recognition.load_image_file("Adithya.png")
+adithya_face_encoding = face_recognition.face_encodings(adithya_image)[0]
+
+# Create arrays of known face encodings and their names
+known_face_encodings = [
+    gagan_face_encoding,
+    chahak_face_encoding,
+    adithya_face_encoding
 ]
+known_face_names = [
+    "Gagan Aggarwal",
+    "Chahak Sharma",
+    "Adithya Oasis"
+]
+
+# Initialize some variables
+face_locations = []
+face_encodings = []
+face_names = []
+process_this_frame = True
+
+
 
 def shouldStartFacial(centroid):
 	return PresentInside(constants["FacialStage"], centroid)
 
 def startFacialRecognition():
-	print("Starting facial stage")
-	userId = "userId"
-	print("Ended facial stage")
-	return userId
+    print("Starting facial stage")
+    img_resp = requests.get(FaceCamurl)
+    Dict = {'Chahak Sharma': "4078650", 'Gagan Aggarwal': "4081424", 'Adithya Oasis': "4081720"}
+    img_arr = np.array(bytearray(img_resp.content), dtype=np.uint8)
+    frame = cv2.imdecode(img_arr, -1)
+    frame = imutils.resize(frame, width=400)
+
+    # Find all the faces and face encodings in the current frame of video
+    face_locations = face_recognition.face_locations(frame)
+    face_encodings = face_recognition.face_encodings(frame, face_locations)
+
+    face_names = []
+    name = "Unknown"
+    for face_encoding in face_encodings:
+        # See if the face is a match for the known face(s)
+        matches = face_recognition.compare_faces(known_face_encodings, face_encoding)
+
+        # # If a match was found in known_face_encodings, just use the first one.
+        # if True in matches:
+        #     first_match_index = matches.index(True)
+        #     name = known_face_names[first_match_index]
+
+        # Or instead, use the known face with the smallest distance to the new face
+        face_distances = face_recognition.face_distance(known_face_encodings, face_encoding)
+        best_match_index = np.argmin(face_distances)
+        if matches[best_match_index]:
+            name = known_face_names[best_match_index]
+
+        face_names.append(name)
+    if name == "Unknown":
+        print("Unknown")
+        # return None
+    print("name" + name)
+    userId = Dict[name]
+    print("Ended facial stage")
+    if not userId:
+        userId = "4081720"
+    return userId
 
 def mapUserIdWithObjectId(userId, objectId):
-	pass
+    print("objectToUserIdMapping")
+    print(objectToUserIdMapping)
+    objectToUserIdMapping[objectId] = userId
 
 def shouldStartRepCount(centroid):
 	return PresentInside(constants["RepStage"], centroid)
 
-def countReps(net, ct):
+def updateCount(setId, userId, reps):
+    with open('DB.json', 'r') as json_file:
+        data = json.load(json_file)
+        el = [x for x in data if x["setId"] == setId]
+        print("Trying to update count with - ")
+        print(el)
+        if(len(el) == 0):
+            saveReps(userId, reps, setId)
+        else:
+            for index, item in enumerate(data):
+                if item.setId == setId:
+                    break
+            else:
+                index = -1
+            data[index].reps += 1
+            with open('DB.json','w') as json_file:
+                json.dump(data, json_file)
+
+
+def countReps(net, ct, setId, userId):
     print("Starting Rep counting stage")
     (H, W) = (None, None)
     time.sleep(2.0)
@@ -64,7 +157,7 @@ def countReps(net, ct):
     prevX = -1
     threshold = 30
     exitCounter = 0
-    exitThreshold = 10
+    exitThreshold = 20
     breaking = False
     while True:
         # read the next frame from the video stream and resize it
@@ -112,16 +205,14 @@ def countReps(net, ct):
             # draw both the ID of the object and the centroid of the
             # object on the output frame
             text = "ID {}".format(objectID)
-            print("whatever you want to print")
-            print(centroid[0].item())
             if(centroid[0].item() < xaxisLeft):
                 hasCompletedHalfRep = True
     
             if(hasCompletedHalfRep and centroid[0].item() > xaxisRight):
                 repCounter += 1
+                print("Count updated - " + int(repCounter))
+                updateCount(setId, userId, repCounter)
                 hasCompletedHalfRep = False
-    
-            print(hasCompletedHalfRep)
             if(prevX != -1):
                 diffX = centroid[0].item() - prevX
             prevX = centroid[0].item()
@@ -129,14 +220,11 @@ def countReps(net, ct):
                 exitCounter += 1
             else:
                 exitCounter = 0
-            print(exitCounter)
-            print(exitThreshold)
+            print("Current stop time - " + str(exitCounter))
+            print("Max stop time - " - exitThreshold)
             if(exitCounter > exitThreshold):
-                print("equal")
                 breaking = True
                 break
-            else:
-                print("not-equal")
             cv2.putText(frame, text, (centroid[0] - 10, centroid[1] - 10),
                 cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
             cv2.circle(frame, (centroid[0], centroid[1]), 4, (0, 255, 0), -1)
@@ -153,11 +241,11 @@ def countReps(net, ct):
     cv2.destroyAllWindows()
     print("Ended Rep counting stage")
 
-def saveReps(userId, reps):
+def saveReps(userId, reps, setId):
     data = []
     with open('DB.json', 'r') as json_file:
         data = json.load(json_file)
-        newData = {"userId": userId, "reps": reps}
+        newData = {"userId": userId, "reps": reps, "setId": setId}
         data.append(newData)
     with open('DB.json','w') as json_file:
         json.dump(data, json_file)
@@ -229,18 +317,31 @@ def runTracker():
             # draw both the ID of the object and the centroid of the
             # object on the output frame
             text = "ID {}".format(objectID)
-            print("whatever you want to print")
-            print(centroid[0])
+            objId = "{}".format(objectID)
+            # print("objectID")
+            # print(objId)
+            # print(type(objId))
             cv2.putText(frame, text, (centroid[0] - 10, centroid[1] - 10),
                 cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
             cv2.circle(frame, (centroid[0], centroid[1]), 4, (0, 255, 0), -1)
             userId = "NOTHING"
             if(shouldStartFacial(centroid)):
                 userId = startFacialRecognition()
-                mapUserIdWithObjectId(userId, objectID)
+                mapUserIdWithObjectId(userId, objId)
             if(shouldStartRepCount(centroid)):
-                reps = countReps(net, ct)
-                saveReps(userId, reps)
+                # print("objectToUserIdMapping rep")
+                # objId = "{}".format(objectID)
+                # print("objectID")
+                # print(objId)
+                # print(type(objId))
+                # print(objectToUserIdMapping)
+                # userId = objectToUserIdMapping[objectID]
+                # if not userId:
+                #     userId = "4081720"
+                userId = "4081720"
+                setId = random.randint(1000,9999)
+                reps = countReps(net, ct, setId, userId)
+                # saveReps(userId, reps, setId)
             
 
         # show the output frame
@@ -255,5 +356,5 @@ def runTracker():
     cv2.destroyAllWindows()
     
 if __name__ == "__main__":
-    saveReps("8", 1)
-    # runTracker()
+    # saveReps("8", 1)
+    runTracker()
